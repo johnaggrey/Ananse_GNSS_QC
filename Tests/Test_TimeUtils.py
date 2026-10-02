@@ -100,13 +100,17 @@ class TestLeapYear:
     """Tests for is_leap_year()."""
 
     def test_common_year(self):
+        """A common year is not a leap year."""
         assert c_TimeUtils.IsLeapYear(2023) is False
 
     def test_leap_year(self):
+        """A year divisible by 4 is a leap year."""
         assert c_TimeUtils.IsLeapYear(2024) is True
 
     def test_century_not_leap(self):
+        """A century year is not a leap year unless it is divisible by 400."""
         assert c_TimeUtils.IsLeapYear(1900) is False
 
     def test_400_year_leap(self):
+        """A year divisible by 400 is a leap year."""
         assert c_TimeUtils.IsLeapYear(2000) is True
