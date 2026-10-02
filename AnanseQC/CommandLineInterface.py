@@ -8,11 +8,7 @@ import sys
 
 from AnanseQC import __version__
 from AnanseQC.Core.Enums import eFileReadingStatus
-from AnanseQC.QualityChecks.Availability import C_ObsAvailability
-from AnanseQC.QualityChecks.CycleSlips import C_CycleSlipDetector
-from AnanseQC.QualityChecks.EpochSampling import C_EpochSampling
-from AnanseQC.QualityChecks.MultipathSnr import C_MultipathSnr
-from AnanseQC.Readers.Reader import C_RinexObsReader
+from AnanseQC.QualityCheck import RunQualityCheck
 from AnanseQC.Reports.QualityCheckReport import C_QcReport
 
 #==============================================================================
@@ -59,50 +55,31 @@ class C_QcCommand:
             return 1
 
         print(f"Reading RINEX file: {filePath}")
-        c_Reader = C_RinexObsReader()
-        obsFile, eStatus = c_Reader.Read(filePath)
+        reportDict, textReport, eStatus = RunQualityCheck(filePath)
 
         if eStatus != eFileReadingStatus.eSuccess:
             print(f"Error: Failed to read file (status: {eStatus.name})", file=sys.stderr)
             return 1
 
-        print(f"  RINEX version {obsFile.header.version}, "
-              f"{len(obsFile.epochs)} epochs, "
-              f"station: {obsFile.header.marker_name}")
+        fileInfo = reportDict['file_info']
+        nEpoch = reportDict['availability']['total_epochs']
+        print(f"  RINEX version {fileInfo['rinex_version']}, "
+              f"{nEpoch} epochs, "
+              f"station: {fileInfo['marker_name']}")
 
-        print("Running QC analysis...")
-        print("  - Satellite/observable availability...")
-        availability = C_ObsAvailability().Analyse(obsFile)
-
-        print("  - Epoch sampling and gap detection...")
-        sampling = C_EpochSampling().Analyse(obsFile)
-
-        print("  - Cycle slip detection...")
-        slips = C_CycleSlipDetector().Analyse(obsFile)
-
-        print("  - Multipath and SNR analysis...")
-        mpSnr = C_MultipathSnr().Analyse(obsFile)
-
+        print("QC checks completed:")
+        print("  - Satellite/observable availability")
+        print("  - Missing observables")
+        print("  - Epoch sampling and gap detection")
+        print("  - Cycle slip detection")
+        print("  - Multipath and SNR analysis")
         print("Generating report...")
         c_Report = C_QcReport()
 
         if outputFormat == 'json':
-            reportDict = c_Report.GenerateJson(
-                obsFile,
-                availability=availability,
-                sampling=sampling,
-                slips=slips,
-                multipathSnr=mpSnr,
-            )
             reportStr = c_Report.ToJsonString(reportDict)
         else:
-            reportStr = c_Report.GenerateText(
-                obsFile,
-                availability=availability,
-                sampling=sampling,
-                slips=slips,
-                multipathSnr=mpSnr,
-            )
+            reportStr = textReport
 
         if outputFile is not None:
             with open(outputFile, 'w', encoding='utf-8') as outputHandle:

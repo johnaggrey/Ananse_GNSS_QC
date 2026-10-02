@@ -4,7 +4,7 @@
 
 import math
 import pytest
-from AnanseQC.Core import constants as C
+from AnanseQC.Core import Constants as C
 from AnanseQC.Core.TimeUtils import C_TimeUtils
 
 c_TimeUtils = C_TimeUtils()

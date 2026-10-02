@@ -30,7 +30,7 @@ from collections import defaultdict
 import math
 
 from AnanseQC.Core.Enums import eGnss, SYSTEM_TO_CHAR
-from AnanseQC.Core import constants as C
+from AnanseQC.Core import Constants as C
 from AnanseQC.Readers.ObsTypes import S_RinexObsFile, S_SatObs
 
 

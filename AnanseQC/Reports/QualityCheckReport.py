@@ -6,6 +6,7 @@
 #
 # The report aggregates results from all QC engines:
 #   - Observation availability
+#   - Missing observables versus the RINEX header
 #   - Epoch sampling / gap analysis
 #   - Cycle slip detection
 #   - Multipath and SNR quality
@@ -16,9 +17,10 @@
 
 import json
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
+from AnanseQC import __version__
 from AnanseQC.Core.Enums import SYSTEM_TO_CHAR, eGnss
 from AnanseQC.Core.TimeUtils import C_TimeUtils
 from AnanseQC.Readers.ObsTypes import S_RinexObsFile
@@ -26,6 +28,9 @@ from AnanseQC.QualityChecks.Availability import S_AvailabilityResult
 from AnanseQC.QualityChecks.EpochSampling import S_EpochSamplingResult
 from AnanseQC.QualityChecks.CycleSlips import S_CycleSlipResult
 from AnanseQC.QualityChecks.MultipathSnr import S_MultipathSnrResult
+
+# JSON contract for web clients. Bump when a response field changes meaning.
+SCHEMA_VERSION = '1.0'
 
 
 #==============================================================================
@@ -44,7 +49,15 @@ class C_QcReport:
         c_TimeUtils = C_TimeUtils()
         gpsWeek, sow = c_TimeUtils.AbsGpsTimeToGpsWeekSec(abs_gps_time)
         y, m, d, hh, mm, ss = c_TimeUtils.GpsWeekSecToYmdhms(gpsWeek, sow)
-        return f"{y:04d}-{m:02d}-{int(d):02d} {hh:02d}:{mm:02d}:{ss:05.2f} GPST"
+        # Calendar conversion can leave a fractional second that rounds to
+        # 60.00 at 0.01 s display resolution. Carry that into the next minute.
+        if round(float(ss), 2) >= 60.0:
+            ss = 0.0
+            mm = int(mm) + 1
+        if mm >= 60:
+            mm = 0
+            hh = int(hh) + 1
+        return f"{y:04d}-{m:02d}-{int(d):02d} {int(hh):02d}:{int(mm):02d}:{ss:05.2f} GPST"
 
 
     #==============================================================================
@@ -85,6 +98,7 @@ class C_QcReport:
     #           sampling        [in]    S_EpochSamplingResult, or None
     #           slips           [in]    S_CycleSlipResult, or None
     #           multipathSnr    [in]    S_MultipathSnrResult, or None
+    #           missingObs      [in]    S_MissingObsResult, or None
     # \Returns:
     #           str             Formatted text report
     #==============================================================================
@@ -92,7 +106,8 @@ class C_QcReport:
                      availability=None,
                      sampling=None,
                      slips=None,
-                     multipathSnr=None):
+                     multipathSnr=None,
+                     missingObs=None):
         lines = []
         sep = '=' * 78
         thin_sep = '-' * 78
@@ -147,6 +162,10 @@ class C_QcReport:
                                  f"{sat_detail.lli_events} LLI events")
 
             lines.append('')
+
+        # --- Missing observables ---
+        if missingObs is not None:
+            lines.extend(self._FormatMissingObsText(missingObs))
 
         # --- Epoch Sampling ---
         if sampling is not None:
@@ -224,8 +243,11 @@ class C_QcReport:
             lines.append('')
 
         lines.append(sep)
-        lines.append(f"  Report generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC")
-        lines.append(f"  Ananse GNSS QC v0.1.0")
+        lines.append(
+            f"  Report generated: "
+            f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        )
+        lines.append(f"  Ananse GNSS QC v{__version__}")
         lines.append(sep)
 
         return '\n'.join(lines)
@@ -244,6 +266,7 @@ class C_QcReport:
     #           sampling        [in]    S_EpochSamplingResult, or None
     #           slips           [in]    S_CycleSlipResult, or None
     #           multipathSnr    [in]    S_MultipathSnrResult, or None
+    #           missingObs      [in]    S_MissingObsResult, or None
     # \Returns:
     #           dict            JSON-serialisable report
     #==============================================================================
@@ -251,11 +274,13 @@ class C_QcReport:
                      availability=None,
                      sampling=None,
                      slips=None,
-                     multipathSnr=None):
+                     multipathSnr=None,
+                     missingObs=None):
         h = obsFile.header
         report = {
-            'version': '0.1.0',
-            'generated_utc': datetime.utcnow().isoformat(),
+            'schema_version': SCHEMA_VERSION,
+            'version': __version__,
+            'generated_utc': datetime.now(timezone.utc).isoformat(),
             'file_info': {
                 'file_path': obsFile.file_path,
                 'rinex_version': h.version,
@@ -301,6 +326,9 @@ class C_QcReport:
                 'last_epoch_gpst': self._FormatGpsTime(availability.last_epoch_time),
                 'systems': sys_data,
             }
+
+        if missingObs is not None:
+            report['missing_observables'] = self._FormatMissingObsJson(missingObs)
 
         if sampling is not None:
             gap_list = []
@@ -375,6 +403,118 @@ class C_QcReport:
 
         return report
 
+
+    #==============================================================================
+    # \Function: _FormatMissingObsText
+    # \Brief: Formats the missing-observable section of the text report
+    # \Params:
+    #           missingObs      [in]    S_MissingObsResult
+    # \Returns:
+    #           list            Lines to append. Counts are epochs. Percent is 0-100.
+    #==============================================================================
+    def _FormatMissingObsText(self, missingObs):
+        lines = []
+        thinSep = '-' * 78
+        lines.append('MISSING OBSERVABLES')
+        lines.append(thinSep)
+
+        nAbsent = len(missingObs.absent_header_types)
+        nSats = len(missingObs.satellites)
+        if nAbsent == 0 and nSats == 0:
+            lines.append('  No missing observables relative to the RINEX header.')
+            lines.append('')
+            return lines
+
+        if nAbsent > 0:
+            lines.append('  Header types with no observations:')
+            absentSystems = sorted(
+                missingObs.absent_header_types.keys(),
+                key=lambda sysEnum: sysEnum.value,
+            )
+            for sysEnum in absentSystems:
+                sysChar = SYSTEM_TO_CHAR.get(sysEnum, '?')
+                typeText = ' '.join(missingObs.absent_header_types[sysEnum])
+                lines.append(f"    {sysChar}: {typeText}")
+
+        lines.append('  Satellite  Type  Present  Missing  Missing %')
+        lines.append('  ' + '-' * 50)
+        rowCount = 0
+        rowLimit = 40
+        satKeys = sorted(
+            missingObs.satellites.keys(),
+            key=lambda satKey: (satKey[0].value, satKey[1]),
+        )
+        for satKey in satKeys:
+            satResult = missingObs.satellites[satKey]
+            sysChar = SYSTEM_TO_CHAR.get(satResult.system, '?')
+            satName = f"{sysChar}{satResult.prn:02d}"
+            for typeGap in satResult.missing_types:
+                if rowCount >= rowLimit:
+                    break
+                lines.append(
+                    f"  {satName:<10s} {typeGap.obs_type:<5s} "
+                    f"{typeGap.epochs_present:7d}  "
+                    f"{typeGap.epochs_missing:7d}  "
+                    f"{typeGap.missing_percent:8.1f}"
+                )
+                rowCount += 1
+            if rowCount >= rowLimit:
+                break
+        # END for-loop over satellites
+
+        nHidden = missingObs.total_missing_records - rowCount
+        if nHidden > 0:
+            lines.append(f"    ... and {nHidden} more")
+
+        lines.append('')
+        return lines
+
+    #==============================================================================
+    # \Function: _FormatMissingObsJson
+    # \Brief: Formats missing observables for the JSON report
+    # \Params:
+    #           missingObs      [in]    S_MissingObsResult
+    # \Returns:
+    #           dict            Absent header types and per-satellite gaps.
+    #                           Epoch fields are counts. missing_percent is 0-100.
+    #==============================================================================
+    def _FormatMissingObsJson(self, missingObs):
+        absent = {}
+        absentSystems = sorted(
+            missingObs.absent_header_types.keys(),
+            key=lambda sysEnum: sysEnum.value,
+        )
+        for sysEnum in absentSystems:
+            sysChar = SYSTEM_TO_CHAR.get(sysEnum, '?')
+            absent[sysChar] = list(missingObs.absent_header_types[sysEnum])
+
+        satList = []
+        satKeys = sorted(
+            missingObs.satellites.keys(),
+            key=lambda satKey: (satKey[0].value, satKey[1]),
+        )
+        for satKey in satKeys:
+            satResult = missingObs.satellites[satKey]
+            sysChar = SYSTEM_TO_CHAR.get(satResult.system, '?')
+            typeRows = []
+            for typeGap in satResult.missing_types:
+                typeRows.append({
+                    'obs_type': typeGap.obs_type,
+                    'epochs_present': typeGap.epochs_present,
+                    'epochs_missing': typeGap.epochs_missing,
+                    'missing_percent': round(typeGap.missing_percent, 2),
+                })
+            satList.append({
+                'satellite': f"{sysChar}{satResult.prn:02d}",
+                'epoch_count': satResult.epoch_count,
+                'missing_types': typeRows,
+            })
+        # END for-loop over satellites
+
+        return {
+            'absent_header_types': absent,
+            'satellites': satList,
+        }
 
     #==============================================================================
     # \Function: ToJsonString

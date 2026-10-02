@@ -11,6 +11,7 @@ Ananse GNSS QC reads RINEX observation files (versions 2.x, 3.x, and 4.x) and pe
 - **Automatic RINEX Version Detection** — reads RINEX 2.x (2.00–2.11), 3.x (3.00–3.05), and 4.x observation files
 - **Multi-Constellation Support** — GPS, GLONASS, Galileo, BeiDou, QZSS, SBAS, NavIC
 - **Satellite & Observable Availability** — per-satellite epoch count, tracking arcs, data gaps, Loss-of-Lock events
+- **Missing Observables** — header observation types that are absent or incomplete, with epoch counts and missing percent
 - **Epoch Sampling Analysis** — nominal interval detection, interval statistics, data completeness percentage, gap detection
 - **Cycle Slip Detection** — Time-Differenced Carrier Phase (TDCP) and Melbourne-Wübbena (MW) dual-frequency methods
 - **Multipath Estimation** — MP1/MP2 linear combinations (geometry-free, ionosphere-free) with per-satellite RMS
@@ -25,8 +26,8 @@ Ananse GNSS QC reads RINEX observation files (versions 2.x, 3.x, and 4.x) and pe
 
 ```bash
 # Clone the repository
-git clone https://github.com/YourUsername/Ananse-GNSS-QC.git
-cd Ananse-GNSS-QC
+git clone https://github.com/johnaggrey/Ananse_GNSS_QC.git
+cd Ananse_GNSS_QC
 
 # Install in development mode
 pip install -e ".[dev]"
@@ -45,39 +46,25 @@ ananse-qc data.rnx --format json --output report.json
 ananse-qc data.obs --verbose
 
 # Or run as a Python module
-python -m ananse_qc station.24o
+python -m AnanseQC station.24o
 ```
 
 ### Python API Usage
 
-```python
-from ananse_qc.core.enums import eFileReadingStatus
-from ananse_qc.qc.availability import C_ObsAvailability
-from ananse_qc.qc.cycle_slips import C_CycleSlipDetector
-from ananse_qc.qc.epoch_sampling import C_EpochSampling
-from ananse_qc.qc.multipath_snr import C_MultipathSnr
-from ananse_qc.readers.reader import C_RinexObsReader
-from ananse_qc.reports.qc_report import C_QcReport
+`RunQualityCheck` is the call a web application should use. It reads the file once and returns a JSON-ready dictionary, a text report, and a status code. Times in the report are GPST. Positions are ECEF metres. SNR is dB-Hz. The dictionary field `schema_version` is the response contract (`1.0`).
 
-# Read a RINEX file. The reader detects version 2.x, 3.x, or 4.x.
-obsFile, eStatus = C_RinexObsReader().Read("station.24o")
+```python
+from AnanseQC.Core.Enums import eFileReadingStatus
+from AnanseQC.QualityCheck import RunQualityCheck
+
+report, textReport, eStatus = RunQualityCheck("station.24o")
 if eStatus != eFileReadingStatus.eSuccess:
     print(f"Error: {eStatus.name}")
     exit(1)
 
-print(f"Station: {obsFile.header.marker_name}")
-print(f"Epochs:  {len(obsFile.epochs)}")
-
-# Run QC analyses
-availability = C_ObsAvailability().Analyse(obsFile)
-sampling = C_EpochSampling().Analyse(obsFile)
-slips = C_CycleSlipDetector().Analyse(obsFile)
-mpSnr = C_MultipathSnr().Analyse(obsFile)
-
-# Generate a text report, or a JSON report for a web API
-c_Report = C_QcReport()
-print(c_Report.GenerateText(obsFile, availability, sampling, slips, mpSnr))
-jsonReport = c_Report.GenerateJson(obsFile, availability, sampling, slips, mpSnr)
+print(textReport)
+print(report["schema_version"])
+print(report["availability"]["duration_seconds"])
 ```
 
 ---
@@ -85,36 +72,41 @@ jsonReport = c_Report.GenerateJson(obsFile, availability, sampling, slips, mpSnr
 ## Architecture
 
 ```
-ananse_qc/
-├── core/                  # Foundation layer
-│   ├── constants.py       # GNSS constants (CLIGHT, frequencies, time system)
-│   ├── enums.py           # eGnss, eGnssFreq, eFileReadingStatus, eRinexObsVersion
-│   └── time_utils.py      # C_TimeUtils (calendar, Julian date, GPS week/SOW)
+AnanseQC/
+├── Core/                      # Foundation layer
+│   ├── Constants.py           # GNSS constants (CLIGHT, frequencies, time system)
+│   ├── Enums.py               # eGnss, eGnssFreq, eFileReadingStatus, eRinexObsVersion
+│   └── TimeUtils.py           # C_TimeUtils (calendar, Julian date, GPS week/SOW)
 │
-├── readers/               # RINEX file parsing
-│   ├── obs_types.py       # S_RinexObsFile, S_EpochRecord, S_SatObs
-│   ├── rinex_detector.py  # C_RinexVersionDetector
-│   ├── rinex_v2_reader.py # C_RinexObsReaderV2
-│   ├── rinex_v3_reader.py # C_RinexObsReaderV3 (also reads 4.x)
-│   └── reader.py          # C_RinexObsReader
+├── Readers/                   # RINEX file parsing
+│   ├── ObsTypes.py            # S_RinexObsFile, S_EpochRecord, S_SatObs
+│   ├── RinexDetector.py       # C_RinexVersionDetector
+│   ├── RinexV2Reader.py       # C_RinexObsReaderV2
+│   ├── RinexV3Reader.py       # C_RinexObsReaderV3 (also reads 4.x)
+│   └── Reader.py              # C_RinexObsReader
 │
-├── qc/                    # QC analysis engines
-│   ├── availability.py    # C_ObsAvailability
-│   ├── epoch_sampling.py  # C_EpochSampling
-│   ├── cycle_slips.py     # C_CycleSlipDetector (TDCP + Melbourne-Wübbena)
-│   └── multipath_snr.py   # C_MultipathSnr
+├── QualityChecks/             # QC analysis engines
+│   ├── Availability.py        # C_ObsAvailability
+│   ├── MissingObservables.py  # C_MissingObservables
+│   ├── EpochSampling.py       # C_EpochSampling
+│   ├── CycleSlips.py          # C_CycleSlipDetector (TDCP + Melbourne-Wübbena)
+│   └── MultipathSnr.py        # C_MultipathSnr
 │
-├── reports/               # Report generation
-│   └── qc_report.py       # C_QcReport (text and JSON)
+├── Reports/                   # Report generation
+│   └── QualityCheckReport.py  # C_QcReport (text and JSON)
 │
-├── cli.py                 # C_QcCommand
-└── __main__.py            # python -m ananse_qc entry point
+├── QualityCheck.py            # RunQualityCheck
+├── CommandLineInterface.py    # C_QcCommand
+└── __main__.py                # python -m AnanseQC entry point
 
-tests/
-├── data/                  # Sample RINEX snippets for testing
-├── test_time_utils.py     # Time conversion tests
-├── test_rinex_readers.py  # Reader tests (V2, V3, unified)
-└── test_qc_engines.py     # QC engine tests
+Tests/
+├── data/                      # Sample RINEX snippets for testing
+├── Test_TimeUtils.py
+├── Test_RinexReaders.py
+├── Test_QC_Engines.py
+├── Test_MissingObservables.py
+├── Test_GapSampling.py
+└── Test_QualityCheck.py
 ```
 
 ---
@@ -122,7 +114,10 @@ tests/
 ## QC Metrics Explained
 
 ### Satellite Availability
-Tracks which satellites are present in each epoch, computes tracking arc lengths and data gaps per satellite, and counts Loss-of-Lock Indicator (LLI) transitions.
+Tracks which satellites are present in each epoch, computes tracking arc lengths and data gaps per satellite, and counts Loss-of-Lock Indicator (LLI) transitions. Observation duration is the GPST span from the first epoch to the last epoch, in seconds.
+
+### Missing Observables
+Each constellation's observation types are taken from the RINEX header. For every satellite, a declared type is missing at a tracked epoch when that descriptor has no value. The report gives the present count, the missing count, and the missing percent of that satellite's tracked epochs. A header type that is never observed on any satellite of its constellation is listed separately.
 
 ### Epoch Sampling
 Detects the nominal sampling interval (statistical mode of inter-epoch intervals), identifies data gaps (intervals exceeding 1.5× nominal), and computes overall data completeness as a percentage.
@@ -167,7 +162,7 @@ Classifies signal strength observations into three tiers:
 pip install -e ".[dev]"
 
 # Run the test suite
-pytest tests/ -v
+pytest Tests/ -v
 ```
 
 ---
