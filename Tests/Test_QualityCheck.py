@@ -1,6 +1,8 @@
 # =============================================================================
 # Tests for the single-call QC entry point used by a web application
 # =============================================================================
+# RunQualityCheck returns a JSON report, a text report, and eFileReadingStatus.
+# Times in the report are GPST. Positions are ECEF metres. SNR is dB-Hz.
 
 import os
 
@@ -14,8 +16,18 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 class TestRunQualityCheck:
     """RunQualityCheck returns a versioned JSON report and a text report."""
 
+    #==============================================================================
+    # \Function: test_sample_report_keys
+    # \Brief: A readable file returns the sections a web client needs
+    # \Note:
+    #   schema_version is the response contract. The complete sample has no
+    #   missing observables.
+    # \Params:
+    #           self            [in]    Test case instance
+    # \Returns:
+    #           None            Assertions only
+    #==============================================================================
     def test_sample_report_keys(self):
-        """A readable file returns the sections a web client needs."""
         path = os.path.join(DATA_DIR, 'sample_v3.snippet')
         reportDict, textReport, eStatus = RunQualityCheck(path)
 
@@ -41,8 +53,15 @@ class TestRunQualityCheck:
         assert reportDict['availability']['total_epochs'] == 3
         assert reportDict['missing_observables']['satellites'] == []
 
+    #==============================================================================
+    # \Function: test_missing_file
+    # \Brief: A missing path returns an empty report and file-not-found
+    # \Params:
+    #           self            [in]    Test case instance
+    # \Returns:
+    #           None            Assertions only
+    #==============================================================================
     def test_missing_file(self):
-        """A missing path returns an empty report and file-not-found."""
         reportDict, textReport, eStatus = RunQualityCheck(
             os.path.join(DATA_DIR, 'does_not_exist.rnx')
         )
