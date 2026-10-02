@@ -5,6 +5,7 @@
 # 00:01:00 to 00:02:00 GPST. Header interval is 30 s.
 # Span is 120 s. The 90 s step is one gap of two missing epochs.
 # Expected epochs over that span: 5. Observed epochs: 3. Completeness: 60%.
+# Durations are seconds. Completeness is percent. Time is GPST.
 
 import os
 
@@ -16,6 +17,14 @@ from AnanseQC.Readers.Reader import C_RinexObsReader
 DATA_DIR = os.path.join(os.path.dirname(__file__), 'data')
 
 
+#==============================================================================
+# \Function: _load_gap_file
+# \Brief: Loads the RINEX 3 sample that contains one known interval break
+# \Params:
+#           None
+# \Returns:
+#           S_RinexObsFile  Parsed file. Reading must succeed.
+#==============================================================================
 def _load_gap_file():
     path = os.path.join(DATA_DIR, 'sample_v3_gap.snippet')
     obsFile, eStatus = C_RinexObsReader().Read(path)
@@ -26,22 +35,45 @@ def _load_gap_file():
 class TestGapSampling:
     """Duration and gap figures for a file with one known interval break."""
 
+    #==============================================================================
+    # \Function: test_duration_seconds
+    # \Brief: The span from the first epoch to the last epoch is 120 seconds
+    # \Params:
+    #           self            [in]    Test case instance
+    # \Returns:
+    #           None            Assertions only. Duration is seconds, GPST.
+    #==============================================================================
     def test_duration_seconds(self):
-        """Span from the first epoch to the last epoch is 120 seconds."""
         obsFile = _load_gap_file()
         availability = C_ObsAvailability().Analyse(obsFile)
         sampling = C_EpochSampling().Analyse(obsFile)
         assert abs(availability.duration_seconds - 120.0) < 0.01
         assert abs(sampling.duration_seconds - 120.0) < 0.01
 
+    #==============================================================================
+    # \Function: test_nominal_interval
+    # \Brief: The nominal interval stays 30 seconds from the header and short step
+    # \Params:
+    #           self            [in]    Test case instance
+    # \Returns:
+    #           None            Assertions only. Interval is seconds.
+    #==============================================================================
     def test_nominal_interval(self):
-        """Nominal interval stays 30 seconds from the header and the short step."""
         sampling = C_EpochSampling().Analyse(_load_gap_file())
         assert abs(sampling.nominal_interval - 30.0) < 0.01
         assert abs(sampling.header_interval - 30.0) < 0.01
 
+    #==============================================================================
+    # \Function: test_gap_and_completeness
+    # \Brief: One 90 second gap removes two epochs and leaves 60 percent
+    # \Note:
+    #   Expected epochs over the 120 s span are 5. Observed epochs are 3.
+    # \Params:
+    #           self            [in]    Test case instance
+    # \Returns:
+    #           None            Assertions only. Gap duration is seconds.
+    #==============================================================================
     def test_gap_and_completeness(self):
-        """One 90 second gap removes two epochs and leaves 60 percent completeness."""
         sampling = C_EpochSampling().Analyse(_load_gap_file())
         assert sampling.total_epochs == 3
         assert sampling.expected_epochs == 5
