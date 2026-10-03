@@ -129,6 +129,107 @@ class C_QcPlots:
         return figure
 
     #==============================================================================
+    # \Function: PlotIntervals
+    # \Brief: Plots inter-epoch interval versus time and marks data gaps
+    # \Note:
+    #   X values are hours from the first normal epoch, GPST. Y values are
+    #   the interval to the previous epoch, in seconds. A gap is an interval
+    #   already recorded on the sampling result. The nominal interval is a
+    #   horizontal reference line, in seconds.
+    # \Params:
+    #           obsFile         [in]    Parsed RINEX observation file
+    #           sampling        [in]    S_EpochSamplingResult
+    # \Returns:
+    #           matplotlib.figure.Figure
+    #==============================================================================
+    def PlotIntervals(self, obsFile, sampling):
+        import matplotlib.pyplot as plt
+
+        figure, axes = plt.subplots(figsize=(8.0, 4.5))
+        axes.set_xlabel('Time from first epoch (hours, GPST)')
+        axes.set_ylabel('Interval (seconds)')
+        axes.set_title('Epoch interval and gaps')
+        axes.grid(True, linestyle=':', linewidth=0.6)
+
+        timestamps = []
+        for epoch in obsFile.epochs:
+            if epoch.epoch_flag <= 1:
+                timestamps.append(epoch.abs_gps_time)
+        # END for-loop over epochs
+
+        if len(timestamps) < 2:
+            axes.text(
+                0.5,
+                0.5,
+                'Not enough epochs',
+                transform=axes.transAxes,
+                ha='center',
+                va='center',
+            )
+            figure.tight_layout()
+            return figure
+
+        firstTime = timestamps[0]
+        intervalHours = []
+        intervalSeconds = []
+        gapHours = []
+        gapSeconds = []
+        for idx in range(1, len(timestamps)):
+            dt = timestamps[idx] - timestamps[idx - 1]
+            hour = (timestamps[idx] - firstTime) / SECONDS_PER_HOUR
+            bGap = self._IsRecordedGap(timestamps[idx], dt, sampling.gaps)
+            if bGap == True:
+                gapHours.append(hour)
+                gapSeconds.append(dt)
+            intervalHours.append(hour)
+            intervalSeconds.append(dt)
+        # END for-loop over intervals
+
+        axes.plot(
+            intervalHours,
+            intervalSeconds,
+            label='Interval',
+        )
+        if len(gapHours) > 0:
+            axes.scatter(
+                gapHours,
+                gapSeconds,
+                marker='o',
+                zorder=3,
+                label='Gap',
+            )
+        if sampling.nominal_interval > 0.0:
+            axes.axhline(
+                sampling.nominal_interval,
+                linestyle='--',
+                linewidth=1.0,
+                label='Nominal interval',
+            )
+        axes.legend(loc='best')
+        axes.set_ylim(bottom=0.0)
+        figure.tight_layout()
+        return figure
+
+    #==============================================================================
+    # \Function: _IsRecordedGap
+    # \Brief: Reports whether an inter-epoch step matches a recorded gap
+    # \Params:
+    #           endTime         [in]    Absolute GPS time of the later epoch, seconds
+    #           interval_s      [in]    Interval length, seconds
+    #           gaps            [in]    List of S_GapRecord
+    # \Returns:
+    #           bool            True when the step is one of the recorded gaps
+    #==============================================================================
+    def _IsRecordedGap(self, endTime, interval_s, gaps):
+        for gap in gaps:
+            bSameEnd = abs(gap.end_time - endTime) < 0.05
+            bSameLength = abs(gap.duration_seconds - interval_s) < 0.05
+            if bSameEnd == True and bSameLength == True:
+                return True
+        # END for-loop over gaps
+        return False
+
+    #==============================================================================
     # \Function: Show
     # \Brief: Displays one figure on screen and blocks until it is closed
     # \Params:
