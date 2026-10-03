@@ -5,6 +5,7 @@
 # Time axes are hours from the first epoch, in GPST.
 # Satellite count is dimensionless.
 
+import math
 import os
 
 from AnanseQC.Core.Enums import SYSTEM_TO_CHAR
@@ -366,6 +367,70 @@ class C_QcPlots:
         axes.set_yticklabels(satNames)
         if len(axes.collections) > 0:
             axes.legend(loc='best')
+        figure.tight_layout()
+        return figure
+
+    #==============================================================================
+    # \Function: PlotMultipath
+    # \Brief: Plots MP1 and MP2 RMS for each satellite
+    # \Note:
+    #   RMS is metres. A NaN RMS is omitted. Satellites are grouped by
+    #   constellation, then by PRN.
+    # \Params:
+    #           multipathSnr    [in]    S_MultipathSnrResult
+    # \Returns:
+    #           matplotlib.figure.Figure
+    #==============================================================================
+    def PlotMultipath(self, multipathSnr):
+        import matplotlib.pyplot as plt
+
+        labels = []
+        mp1Y = []
+        mp1Rms = []
+        mp2Y = []
+        mp2Rms = []
+        satKeys = sorted(
+            multipathSnr.sat_multipath.keys(),
+            key=lambda satKey: (satKey[0].value, satKey[1]),
+        )
+        for idx, satKey in enumerate(satKeys):
+            satResult = multipathSnr.sat_multipath[satKey]
+            sysChar = SYSTEM_TO_CHAR.get(satResult.system, '?')
+            labels.append(f"{sysChar}{satResult.prn:02d}")
+            if math.isnan(satResult.mp1_rms) == False:
+                mp1Y.append(idx - 0.18)
+                mp1Rms.append(satResult.mp1_rms)
+            if math.isnan(satResult.mp2_rms) == False:
+                mp2Y.append(idx + 0.18)
+                mp2Rms.append(satResult.mp2_rms)
+        # END for-loop over satellites
+
+        barHeight = 0.45
+        figureHeight = max(4.5, barHeight * max(len(labels), 1) + 1.4)
+        figure, axes = plt.subplots(figsize=(8.0, figureHeight))
+        axes.set_xlabel('RMS (metres)')
+        axes.set_ylabel('Satellite')
+        axes.set_title('Multipath')
+        axes.grid(True, axis='x', linestyle=':', linewidth=0.6)
+
+        if len(mp1Rms) == 0 and len(mp2Rms) == 0:
+            axes.text(
+                0.5,
+                0.5,
+                'No multipath',
+                transform=axes.transAxes,
+                ha='center',
+                va='center',
+            )
+        else:
+            if len(mp1Rms) > 0:
+                axes.barh(mp1Y, mp1Rms, height=0.32, label='MP1')
+            if len(mp2Rms) > 0:
+                axes.barh(mp2Y, mp2Rms, height=0.32, label='MP2')
+            axes.set_yticks(list(range(len(labels))))
+            axes.set_yticklabels(labels)
+            axes.legend(loc='best')
+        axes.set_xlim(left=0.0)
         figure.tight_layout()
         return figure
 
