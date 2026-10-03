@@ -17,6 +17,7 @@ Ananse GNSS QC reads RINEX observation files (versions 2.x, 3.x, and 4.x) and pe
 - **Multipath Estimation** — MP1/MP2 linear combinations (geometry-free, ionosphere-free) with per-satellite RMS
 - **SNR Quality Metrics** — per-satellite, per-observable signal strength statistics with good/fair/poor classification
 - **Dual Output Formats** — human-readable text reports and machine-readable JSON for web APIs
+- **QC Plots** — seven matplotlib figures, shown on screen or saved as PNG files beside the report
 
 ---
 
@@ -45,6 +46,9 @@ ananse-qc data.rnx --format json --output report.json
 # Verbose mode (debug logging)
 ananse-qc data.obs --verbose
 
+# Text report plus seven PNG figures beside the report file
+ananse-qc station.24o --output report.txt
+
 # Or run as a Python module
 python -m AnanseQC station.24o
 ```
@@ -66,6 +70,26 @@ print(textReport)
 print(report["schema_version"])
 print(report["availability"]["duration_seconds"])
 ```
+
+`RunQualityCheck` returns the report only. It does not open or save figures. A web application should keep using that call.
+
+### Plots
+
+The command-line tool draws seven figures from the same QC results as the report. Time axes are hours from the first epoch, labelled GPST. Satellite labels use the RINEX system character and PRN, such as `G01`.
+
+| PNG file | Figure |
+|----------|--------|
+| `report_satellites.png` | Satellites versus time |
+| `report_availability.png` | Percent of epochs each satellite is present |
+| `report_intervals.png` | Epoch interval and gaps, in seconds |
+| `report_missing.png` | Missing observables as a percent of that satellite's tracked epochs |
+| `report_slips.png` | Cycle slips versus time (TDCP and Melbourne-Wübbena) |
+| `report_multipath.png` | MP1 and MP2 RMS, in metres |
+| `report_snr.png` | Mean SNR per satellite, in dB-Hz, with lines at 25 and 35 |
+
+Without `--output`, the text report is printed and the figures open on screen. Close the figures to exit. With `--output`, the report is written to that path and each figure is saved beside it. The PNG name is the report file name without its extension, plus the plot name. `ananse-qc station.24o --output report.json` writes `report.json` and the same seven PNG files, including `report_snr.png`.
+
+A sky plot needs satellite azimuth and elevation from a navigation file. This tool reads observation files only, so sky plots and elevation-dependent SNR wait on navigation-file reading.
 
 ---
 
@@ -93,7 +117,8 @@ AnanseQC/
 │   └── MultipathSnr.py        # C_MultipathSnr
 │
 ├── Reports/                   # Report generation
-│   └── QualityCheckReport.py  # C_QcReport (text and JSON)
+│   ├── QualityCheckReport.py  # C_QcReport (text and JSON)
+│   └── Plots.py               # C_QcPlots (screen figures and PNG files)
 │
 ├── QualityCheck.py            # RunQualityCheck
 ├── CommandLineInterface.py    # C_QcCommand
@@ -106,7 +131,14 @@ Tests/
 ├── Test_QC_Engines.py
 ├── Test_MissingObservables.py
 ├── Test_GapSampling.py
-└── Test_QualityCheck.py
+├── Test_QualityCheck.py
+├── Test_SatellitePlot.py
+├── Test_AvailabilityPlot.py
+├── Test_IntervalPlot.py
+├── Test_MissingPlot.py
+├── Test_SlipPlot.py
+├── Test_MultipathPlot.py
+└── Test_SnrPlot.py
 ```
 
 ---
@@ -169,7 +201,7 @@ pytest Tests/ -v
 
 ## Roadmap
 
-- [ ] Navigation file reading (for elevation-dependent analysis)
+- [ ] Navigation file reading (needed for sky plots and elevation-dependent SNR)
 - [ ] Elevation-dependent multipath and SNR analysis
 - [ ] Ionospheric delay estimation (geometry-free combination)
 - [ ] RINEX file repair/cleaning suggestions
