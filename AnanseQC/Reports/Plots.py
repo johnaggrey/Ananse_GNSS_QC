@@ -230,6 +230,63 @@ class C_QcPlots:
         return False
 
     #==============================================================================
+    # \Function: PlotMissing
+    # \Brief: Plots missing percent for each satellite and header observation type
+    # \Note:
+    #   The percent uses that satellite's tracked epochs, not the file length.
+    #   Satellites with a complete set of header types are omitted.
+    # \Params:
+    #           missingObs      [in]    S_MissingObsResult
+    # \Returns:
+    #           matplotlib.figure.Figure
+    #==============================================================================
+    def PlotMissing(self, missingObs):
+        import matplotlib.pyplot as plt
+
+        labels = []
+        percents = []
+        satKeys = sorted(
+            missingObs.satellites.keys(),
+            key=lambda satKey: (satKey[0].value, satKey[1]),
+        )
+        for satKey in satKeys:
+            satResult = missingObs.satellites[satKey]
+            sysChar = SYSTEM_TO_CHAR.get(satResult.system, '?')
+            satName = f"{sysChar}{satResult.prn:02d}"
+            for typeGap in satResult.missing_types:
+                labels.append(f"{satName} {typeGap.obs_type}")
+                percents.append(typeGap.missing_percent)
+            # END for-loop over observation types
+        # END for-loop over satellites
+
+        labels.reverse()
+        percents.reverse()
+
+        barHeight = 0.28
+        figureHeight = max(4.5, barHeight * max(len(labels), 1) + 1.2)
+        figure, axes = plt.subplots(figsize=(8.0, figureHeight))
+        axes.set_xlabel('Percent of tracked epochs')
+        axes.set_ylabel('Satellite and type')
+        axes.set_title('Missing observables')
+        axes.set_xlim(0.0, 100.0)
+        axes.grid(True, axis='x', linestyle=':', linewidth=0.6)
+
+        if len(labels) == 0:
+            axes.text(
+                0.5,
+                0.5,
+                'No missing observables',
+                transform=axes.transAxes,
+                ha='center',
+                va='center',
+            )
+        else:
+            axes.barh(labels, percents)
+
+        figure.tight_layout()
+        return figure
+
+    #==============================================================================
     # \Function: Show
     # \Brief: Displays one figure on screen and blocks until it is closed
     # \Params:

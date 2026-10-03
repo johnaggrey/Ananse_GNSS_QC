@@ -113,6 +113,7 @@ class C_QcCommand:
         satFigure = c_Plots.PlotSatellites(obsFile, availability)
         availFigure = c_Plots.PlotAvailability(availability)
         intervalFigure = c_Plots.PlotIntervals(obsFile, sampling)
+        missingFigure = c_Plots.PlotMissing(missingObs)
         if outputFile is None:
             print("Showing plots. Close the figures to exit.")
             c_Plots.Show(satFigure)
@@ -120,9 +121,11 @@ class C_QcCommand:
             satPath = c_Plots.SaveBeside(satFigure, outputFile, 'satellites')
             availPath = c_Plots.SaveBeside(availFigure, outputFile, 'availability')
             intervalPath = c_Plots.SaveBeside(intervalFigure, outputFile, 'intervals')
+            missingPath = c_Plots.SaveBeside(missingFigure, outputFile, 'missing')
             print(f"Plot written to: {satPath}")
             print(f"Plot written to: {availPath}")
             print(f"Plot written to: {intervalPath}")
+            print(f"Plot written to: {missingPath}")
 
         return 0
 
