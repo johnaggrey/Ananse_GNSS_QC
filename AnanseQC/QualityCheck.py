@@ -24,19 +24,47 @@ from AnanseQC.Readers.Reader import C_RinexObsReader
 from AnanseQC.Reports.QualityCheckReport import C_QcReport
 
 
-def RunQualityCheck(filePath):
+#==============================================================================
+# \Function: AnalyseFile
+# \Brief: Reads one RINEX file and runs every QC engine
+# \Note:
+#   Times on the epochs are GPST seconds. The caller owns the returned file.
+# \Params:
+#           filePath        [in]    Path to a RINEX 2.x, 3.x, or 4.x observation file
+# \Returns:
+#           S_RinexObsFile or None
+#           dict            Keys availability, sampling, slips, multipathSnr,
+#                           missingObs. Empty when reading fails.
+#           eFileReadingStatus
+#==============================================================================
+def AnalyseFile(filePath):
     obsFile, eStatus = C_RinexObsReader().Read(filePath)
     if eStatus != eFileReadingStatus.eSuccess:
-        return {}, '', eStatus
+        return None, {}, eStatus
 
     # The reader has already formed the measurements. Each call below is one
     # QC responsibility: availability, sampling, cycle slips, multipath, and
     # missing observables.
-    availability = C_ObsAvailability().Analyse(obsFile)
-    sampling = C_EpochSampling().Analyse(obsFile)
-    slips = C_CycleSlipDetector().Analyse(obsFile)
-    multipathSnr = C_MultipathSnr().Analyse(obsFile)
-    missingObs = C_MissingObservables().Analyse(obsFile)
+    results = {
+        'availability': C_ObsAvailability().Analyse(obsFile),
+        'sampling': C_EpochSampling().Analyse(obsFile),
+        'slips': C_CycleSlipDetector().Analyse(obsFile),
+        'multipathSnr': C_MultipathSnr().Analyse(obsFile),
+        'missingObs': C_MissingObservables().Analyse(obsFile),
+    }
+    return obsFile, results, eStatus
+
+
+def RunQualityCheck(filePath):
+    obsFile, results, eStatus = AnalyseFile(filePath)
+    if eStatus != eFileReadingStatus.eSuccess:
+        return {}, '', eStatus
+
+    availability = results['availability']
+    sampling = results['sampling']
+    slips = results['slips']
+    multipathSnr = results['multipathSnr']
+    missingObs = results['missingObs']
 
     cReport = C_QcReport()
     reportDict = cReport.GenerateJson(

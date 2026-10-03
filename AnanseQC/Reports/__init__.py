@@ -1,1 +1,1 @@
-# Reports module: QC report generation (text, JSON)
+# Reports module: QC report generation (text, JSON, plots)

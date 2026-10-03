@@ -8,7 +8,8 @@ import sys
 
 from AnanseQC import __version__
 from AnanseQC.Core.Enums import eFileReadingStatus
-from AnanseQC.QualityCheck import RunQualityCheck
+from AnanseQC.QualityCheck import AnalyseFile
+from AnanseQC.Reports.Plots import C_QcPlots
 from AnanseQC.Reports.QualityCheckReport import C_QcReport
 
 #==============================================================================
@@ -55,17 +56,16 @@ class C_QcCommand:
             return 1
 
         print(f"Reading RINEX file: {filePath}")
-        reportDict, textReport, eStatus = RunQualityCheck(filePath)
+        obsFile, results, eStatus = AnalyseFile(filePath)
 
         if eStatus != eFileReadingStatus.eSuccess:
             print(f"Error: Failed to read file (status: {eStatus.name})", file=sys.stderr)
             return 1
 
-        fileInfo = reportDict['file_info']
-        nEpoch = reportDict['availability']['total_epochs']
-        print(f"  RINEX version {fileInfo['rinex_version']}, "
+        nEpoch = results['availability'].total_epochs
+        print(f"  RINEX version {obsFile.header.version}, "
               f"{nEpoch} epochs, "
-              f"station: {fileInfo['marker_name']}")
+              f"station: {obsFile.header.marker_name}")
 
         print("QC checks completed:")
         print("  - Satellite/observable availability")
@@ -75,11 +75,31 @@ class C_QcCommand:
         print("  - Multipath and SNR analysis")
         print("Generating report...")
         c_Report = C_QcReport()
+        availability = results['availability']
+        sampling = results['sampling']
+        slips = results['slips']
+        multipathSnr = results['multipathSnr']
+        missingObs = results['missingObs']
 
         if outputFormat == 'json':
+            reportDict = c_Report.GenerateJson(
+                obsFile,
+                availability=availability,
+                sampling=sampling,
+                slips=slips,
+                multipathSnr=multipathSnr,
+                missingObs=missingObs,
+            )
             reportStr = c_Report.ToJsonString(reportDict)
         else:
-            reportStr = textReport
+            reportStr = c_Report.GenerateText(
+                obsFile,
+                availability=availability,
+                sampling=sampling,
+                slips=slips,
+                multipathSnr=multipathSnr,
+                missingObs=missingObs,
+            )
 
         if outputFile is not None:
             with open(outputFile, 'w', encoding='utf-8') as outputHandle:
@@ -88,6 +108,15 @@ class C_QcCommand:
         else:
             print('')
             print(reportStr)
+
+        c_Plots = C_QcPlots()
+        satFigure = c_Plots.PlotSatellites(obsFile, availability)
+        if outputFile is None:
+            print("Showing satellites versus time. Close the figure to exit.")
+            c_Plots.Show(satFigure)
+        else:
+            pngPath = c_Plots.SaveBeside(satFigure, outputFile, 'satellites')
+            print(f"Plot written to: {pngPath}")
 
         return 0
 
