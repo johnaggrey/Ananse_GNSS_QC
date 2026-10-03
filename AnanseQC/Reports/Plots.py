@@ -287,6 +287,89 @@ class C_QcPlots:
         return figure
 
     #==============================================================================
+    # \Function: PlotSlips
+    # \Brief: Plots each cycle slip against time and satellite
+    # \Note:
+    #   X values are hours from the first epoch, GPST. Y values are satellite
+    #   ids. TDCP uses an x marker. Melbourne-Wubbena uses a circle. An empty
+    #   event list still draws the axes.
+    # \Params:
+    #           obsFile         [in]    Parsed RINEX observation file
+    #           slips           [in]    S_CycleSlipResult
+    # \Returns:
+    #           matplotlib.figure.Figure
+    #==============================================================================
+    def PlotSlips(self, obsFile, slips):
+        import matplotlib.pyplot as plt
+
+        satNames = []
+        for event in slips.all_events:
+            sysChar = SYSTEM_TO_CHAR.get(event.system, '?')
+            satName = f"{sysChar}{event.prn:02d}"
+            if satName not in satNames:
+                satNames.append(satName)
+        # END for-loop over slip events
+        satNames.sort()
+
+        barHeight = 0.35
+        figureHeight = max(4.5, barHeight * max(len(satNames), 1) + 1.4)
+        figure, axes = plt.subplots(figsize=(8.0, figureHeight))
+        axes.set_xlabel('Time from first epoch (hours, GPST)')
+        axes.set_ylabel('Satellite')
+        axes.set_title('Cycle slips')
+        axes.grid(True, linestyle=':', linewidth=0.6)
+
+        if len(slips.all_events) == 0 or len(obsFile.epochs) == 0:
+            axes.text(
+                0.5,
+                0.5,
+                'No cycle slips',
+                transform=axes.transAxes,
+                ha='center',
+                va='center',
+            )
+            figure.tight_layout()
+            return figure
+
+        firstTime = obsFile.epochs[0].abs_gps_time
+        yIndex = {}
+        for idx, satName in enumerate(satNames):
+            yIndex[satName] = idx
+
+        tdcpHours = []
+        tdcpY = []
+        mwHours = []
+        mwY = []
+        for event in slips.all_events:
+            sysChar = SYSTEM_TO_CHAR.get(event.system, '?')
+            satName = f"{sysChar}{event.prn:02d}"
+            hour = (event.time - firstTime) / SECONDS_PER_HOUR
+            if event.method == 'TDCP':
+                tdcpHours.append(hour)
+                tdcpY.append(yIndex[satName])
+            elif event.method == 'MW':
+                mwHours.append(hour)
+                mwY.append(yIndex[satName])
+        # END for-loop over slip events
+
+        if len(tdcpHours) > 0:
+            axes.scatter(tdcpHours, tdcpY, marker='x', label='TDCP', zorder=3)
+        if len(mwHours) > 0:
+            axes.scatter(
+                mwHours,
+                mwY,
+                marker='o',
+                label='Melbourne-Wubbena',
+                zorder=3,
+            )
+        axes.set_yticks(list(range(len(satNames))))
+        axes.set_yticklabels(satNames)
+        if len(axes.collections) > 0:
+            axes.legend(loc='best')
+        figure.tight_layout()
+        return figure
+
+    #==============================================================================
     # \Function: Show
     # \Brief: Displays one figure on screen and blocks until it is closed
     # \Params:

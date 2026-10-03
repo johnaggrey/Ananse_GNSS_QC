@@ -114,6 +114,7 @@ class C_QcCommand:
         availFigure = c_Plots.PlotAvailability(availability)
         intervalFigure = c_Plots.PlotIntervals(obsFile, sampling)
         missingFigure = c_Plots.PlotMissing(missingObs)
+        slipFigure = c_Plots.PlotSlips(obsFile, slips)
         if outputFile is None:
             print("Showing plots. Close the figures to exit.")
             c_Plots.Show(satFigure)
@@ -122,10 +123,12 @@ class C_QcCommand:
             availPath = c_Plots.SaveBeside(availFigure, outputFile, 'availability')
             intervalPath = c_Plots.SaveBeside(intervalFigure, outputFile, 'intervals')
             missingPath = c_Plots.SaveBeside(missingFigure, outputFile, 'missing')
+            slipPath = c_Plots.SaveBeside(slipFigure, outputFile, 'slips')
             print(f"Plot written to: {satPath}")
             print(f"Plot written to: {availPath}")
             print(f"Plot written to: {intervalPath}")
             print(f"Plot written to: {missingPath}")
+            print(f"Plot written to: {slipPath}")
 
         return 0
 
