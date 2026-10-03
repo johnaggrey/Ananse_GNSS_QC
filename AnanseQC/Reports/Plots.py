@@ -75,6 +75,60 @@ class C_QcPlots:
         return figure
 
     #==============================================================================
+    # \Function: PlotAvailability
+    # \Brief: Plots each satellite's availability as a percent of epochs
+    # \Note:
+    #   Bars are grouped by constellation, then by PRN. The percent uses the
+    #   satellite's tracked epochs over the file length.
+    # \Params:
+    #           availability    [in]    S_AvailabilityResult
+    # \Returns:
+    #           matplotlib.figure.Figure
+    #==============================================================================
+    def PlotAvailability(self, availability):
+        import matplotlib.pyplot as plt
+
+        labels = []
+        percents = []
+        systems = sorted(availability.systems.keys(), key=lambda item: item.value)
+        for eSystem in systems:
+            sysChar = SYSTEM_TO_CHAR.get(eSystem, '?')
+            details = availability.systems[eSystem].sat_details
+            for prn in sorted(details.keys()):
+                labels.append(f"{sysChar}{prn:02d}")
+                percents.append(details[prn].epoch_percentage)
+            # END for-loop over satellites
+        # END for-loop over constellations
+
+        # Draw the first satellite at the top of the horizontal bars.
+        labels.reverse()
+        percents.reverse()
+
+        barHeight = 0.28
+        figureHeight = max(4.5, barHeight * len(labels) + 1.2)
+        figure, axes = plt.subplots(figsize=(8.0, figureHeight))
+        axes.set_xlabel('Percent of epochs')
+        axes.set_ylabel('Satellite')
+        axes.set_title('Satellite availability')
+        axes.set_xlim(0.0, 100.0)
+        axes.grid(True, axis='x', linestyle=':', linewidth=0.6)
+
+        if len(labels) == 0:
+            axes.text(
+                0.5,
+                0.5,
+                'No satellites',
+                transform=axes.transAxes,
+                ha='center',
+                va='center',
+            )
+        else:
+            axes.barh(labels, percents)
+
+        figure.tight_layout()
+        return figure
+
+    #==============================================================================
     # \Function: Show
     # \Brief: Displays one figure on screen and blocks until it is closed
     # \Params:

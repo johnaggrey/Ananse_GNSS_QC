@@ -111,12 +111,15 @@ class C_QcCommand:
 
         c_Plots = C_QcPlots()
         satFigure = c_Plots.PlotSatellites(obsFile, availability)
+        availFigure = c_Plots.PlotAvailability(availability)
         if outputFile is None:
-            print("Showing satellites versus time. Close the figure to exit.")
+            print("Showing plots. Close the figures to exit.")
             c_Plots.Show(satFigure)
         else:
-            pngPath = c_Plots.SaveBeside(satFigure, outputFile, 'satellites')
-            print(f"Plot written to: {pngPath}")
+            satPath = c_Plots.SaveBeside(satFigure, outputFile, 'satellites')
+            availPath = c_Plots.SaveBeside(availFigure, outputFile, 'availability')
+            print(f"Plot written to: {satPath}")
+            print(f"Plot written to: {availPath}")
 
         return 0
 
