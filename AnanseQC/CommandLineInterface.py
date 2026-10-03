@@ -116,6 +116,7 @@ class C_QcCommand:
         missingFigure = c_Plots.PlotMissing(missingObs)
         slipFigure = c_Plots.PlotSlips(obsFile, slips)
         multipathFigure = c_Plots.PlotMultipath(multipathSnr)
+        snrFigure = c_Plots.PlotSnr(multipathSnr)
         if outputFile is None:
             print("Showing plots. Close the figures to exit.")
             c_Plots.Show(satFigure)
@@ -136,6 +137,8 @@ class C_QcCommand:
             print(f"Plot written to: {missingPath}")
             print(f"Plot written to: {slipPath}")
             print(f"Plot written to: {multipathPath}")
+            snrPath = c_Plots.SaveBeside(snrFigure, outputFile, 'snr')
+            print(f"Plot written to: {snrPath}")
 
         return 0
 

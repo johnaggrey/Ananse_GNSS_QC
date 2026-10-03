@@ -9,6 +9,10 @@ import math
 import os
 
 from AnanseQC.Core.Enums import SYSTEM_TO_CHAR
+from AnanseQC.QualityChecks.MultipathSnr import (
+    SNR_FAIR_THRESHOLD,
+    SNR_GOOD_THRESHOLD,
+)
 
 # Seconds in one hour. Used to convert absolute GPST seconds to hours.
 SECONDS_PER_HOUR = 3600.0
@@ -433,6 +437,97 @@ class C_QcPlots:
         axes.set_xlim(left=0.0)
         figure.tight_layout()
         return figure
+
+    #==============================================================================
+    # \Function: PlotSnr
+    # \Brief: Plots mean SNR per satellite with the fair and good boundaries
+    # \Note:
+    #   The mean is weighted by the number of SNR observations of each type.
+    #   Units are dB-Hz. Fair is 25 dB-Hz. Good is 35 dB-Hz.
+    # \Params:
+    #           multipathSnr    [in]    S_MultipathSnrResult
+    # \Returns:
+    #           matplotlib.figure.Figure
+    #==============================================================================
+    def PlotSnr(self, multipathSnr):
+        import matplotlib.pyplot as plt
+
+        labels = []
+        means = []
+        satKeys = sorted(
+            multipathSnr.sat_snr.keys(),
+            key=lambda satKey: (satKey[0].value, satKey[1]),
+        )
+        for satKey in satKeys:
+            satResult = multipathSnr.sat_snr[satKey]
+            meanSnr = self._MeanSnrDbHz(satResult)
+            if meanSnr is None:
+                continue
+            sysChar = SYSTEM_TO_CHAR.get(satResult.system, '?')
+            labels.append(f"{sysChar}{satResult.prn:02d}")
+            means.append(meanSnr)
+        # END for-loop over satellites
+
+        labels.reverse()
+        means.reverse()
+
+        barHeight = 0.28
+        figureHeight = max(4.5, barHeight * max(len(labels), 1) + 1.2)
+        figure, axes = plt.subplots(figsize=(8.0, figureHeight))
+        axes.set_xlabel('Mean SNR (dB-Hz)')
+        axes.set_ylabel('Satellite')
+        axes.set_title('Signal strength')
+        axes.grid(True, axis='x', linestyle=':', linewidth=0.6)
+        axes.axvline(
+            SNR_FAIR_THRESHOLD,
+            linestyle='--',
+            linewidth=1.0,
+            label='Fair, 25 dB-Hz',
+        )
+        axes.axvline(
+            SNR_GOOD_THRESHOLD,
+            linestyle='--',
+            linewidth=1.0,
+            label='Good, 35 dB-Hz',
+        )
+
+        if len(labels) == 0:
+            axes.text(
+                0.5,
+                0.5,
+                'No SNR',
+                transform=axes.transAxes,
+                ha='center',
+                va='center',
+            )
+        else:
+            axes.barh(labels, means)
+        axes.legend(loc='best')
+        axes.set_xlim(left=0.0)
+        figure.tight_layout()
+        return figure
+
+    #==============================================================================
+    # \Function: _MeanSnrDbHz
+    # \Brief: Returns the observation-count-weighted mean SNR for one satellite
+    # \Params:
+    #           satResult       [in]    S_SatSnrResult
+    # \Returns:
+    #           float or None   Mean SNR in dB-Hz, or None when no observations
+    #==============================================================================
+    def _MeanSnrDbHz(self, satResult):
+        weightedSum = 0.0
+        nObs = 0
+        for stats in satResult.obs_type_stats.values():
+            nType = stats.get('count', 0)
+            if nType <= 0:
+                continue
+            weightedSum += stats['mean'] * nType
+            nObs += nType
+        # END for-loop over observation types
+        if nObs <= 0:
+            return None
+        return weightedSum / float(nObs)
 
     #==============================================================================
     # \Function: Show
