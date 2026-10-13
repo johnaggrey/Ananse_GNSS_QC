@@ -30,10 +30,12 @@ class TestRinexDetector:
     #==============================================================================
     def test_detect_v2(self):
         path = os.path.join(DATA_DIR, 'sample_v2.snippet')
-        version, ver_float, status = C_RinexVersionDetector().Detect(path)
-        assert status == eFileReadingStatus.eSuccess
-        assert version == eRinexObsVersion.eRinexObsVersion_2
-        assert abs(ver_float - 2.11) < 0.01
+        fileId = C_RinexVersionDetector().Detect(path)
+        assert fileId.status == eFileReadingStatus.eSuccess
+        assert fileId.version_enum == eRinexObsVersion.eRinexObsVersion_2
+        assert abs(fileId.version_float - 2.11) < 0.01
+        assert fileId.file_type == 'O'
+        assert fileId.system_char == 'G'
 
     #==============================================================================
     # \Function: test_detect_v3
@@ -45,10 +47,12 @@ class TestRinexDetector:
     #==============================================================================
     def test_detect_v3(self):
         path = os.path.join(DATA_DIR, 'sample_v3.snippet')
-        version, ver_float, status = C_RinexVersionDetector().Detect(path)
-        assert status == eFileReadingStatus.eSuccess
-        assert version == eRinexObsVersion.eRinexObsVersion_3
-        assert abs(ver_float - 3.05) < 0.01
+        fileId = C_RinexVersionDetector().Detect(path)
+        assert fileId.status == eFileReadingStatus.eSuccess
+        assert fileId.version_enum == eRinexObsVersion.eRinexObsVersion_3
+        assert abs(fileId.version_float - 3.05) < 0.01
+        assert fileId.file_type == 'O'
+        assert fileId.system_char == 'M'
 
     #==============================================================================
     # \Function: test_nonexistent_file
@@ -59,9 +63,9 @@ class TestRinexDetector:
     #           None            Assertions only
     #==============================================================================
     def test_nonexistent_file(self):
-        version, _, status = C_RinexVersionDetector().Detect('/nonexistent/file.obs')
-        assert status == eFileReadingStatus.eFileNotFound
-        assert version == eRinexObsVersion.eRinexObsVersion_Invalid
+        fileId = C_RinexVersionDetector().Detect('/nonexistent/file.obs')
+        assert fileId.status == eFileReadingStatus.eFileNotFound
+        assert fileId.version_enum == eRinexObsVersion.eRinexObsVersion_Invalid
 
     #==============================================================================
     # \Function: test_empty_path
@@ -72,8 +76,8 @@ class TestRinexDetector:
     #           None            Assertions only
     #==============================================================================
     def test_empty_path(self):
-        version, _, status = C_RinexVersionDetector().Detect('')
-        assert status == eFileReadingStatus.eFileNotFound
+        fileId = C_RinexVersionDetector().Detect('')
+        assert fileId.status == eFileReadingStatus.eFileNotFound
 
 
 class TestRinexV2Reader:

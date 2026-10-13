@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # \Brief: Reads a RINEX observation file after detecting its version
 # \Note:
 #   Supported versions are RINEX 2.x, 3.x, and 4.x observation files.
+#   A navigation file (type N) is rejected.
 #   The returned record is always S_RinexObsFile.
 #==============================================================================
 class C_RinexObsReader:
@@ -41,21 +42,29 @@ class C_RinexObsReader:
     #           S_RinexObsFile, eFileReadingStatus
     #==============================================================================
     def Read(self, filePath):
-        versionEnum, versionFloat, detectStatus = self.c_Detector.Detect(filePath)
+        fileId = self.c_Detector.Detect(filePath)
 
-        if detectStatus != eFileReadingStatus.eSuccess:
-            logger.error("Version detection failed for %s: %s", filePath, detectStatus)
-            return S_RinexObsFile(), detectStatus
+        if fileId.status != eFileReadingStatus.eSuccess:
+            logger.error("Version detection failed for %s: %s", filePath, fileId.status)
+            return S_RinexObsFile(), fileId.status
+
+        if fileId.file_type != 'O':
+            logger.error(
+                "Not an observation file: %s (type '%s')",
+                filePath,
+                fileId.file_type,
+            )
+            return S_RinexObsFile(), eFileReadingStatus.eFileNotSupported
 
         logger.info("Detected RINEX version %.2f (%s) for file: %s",
-                    versionFloat, versionEnum.name, filePath)
+                    fileId.version_float, fileId.version_enum.name, filePath)
 
-        if versionEnum == eRinexObsVersion.eRinexObsVersion_2:
+        if fileId.version_enum == eRinexObsVersion.eRinexObsVersion_2:
             return self.c_ReaderV2.Read(filePath)
 
-        if versionEnum in (eRinexObsVersion.eRinexObsVersion_3,
-                           eRinexObsVersion.eRinexObsVersion_4):
+        if fileId.version_enum in (eRinexObsVersion.eRinexObsVersion_3,
+                                   eRinexObsVersion.eRinexObsVersion_4):
             return self.c_ReaderV3.Read(filePath)
 
-        logger.error("Unsupported RINEX version: %.2f", versionFloat)
+        logger.error("Unsupported RINEX version: %.2f", fileId.version_float)
         return S_RinexObsFile(), eFileReadingStatus.eFileNotSupported
