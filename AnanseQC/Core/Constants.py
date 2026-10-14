@@ -63,6 +63,18 @@ CLIGHT = 299792458.0                            # Speed of light (m/s)
 PI = 3.14159265358979323846                     # Pi
 
 #==============================================================================
+# Earth model and broadcast orbit
+# Frame: WGS84. a is metres. f is dimensionless.
+# GPS_GM and GPS_OMEGA_E are the IS-GPS-200 broadcast values.
+# QZSS uses these same two values.
+# GM is m^3/s^2. Earth rotation is rad/s.
+#==============================================================================
+WGS84_A = 6378137.0                             # WGS84 semi-major axis (m)
+WGS84_F = 1.0 / 298.257223563                   # WGS84 flattening
+GPS_GM = 3.986005e14                            # GPS/QZSS broadcast GM (m^3/s^2)
+GPS_OMEGA_E = 7.2921151467e-5                   # GPS/QZSS Earth rotation (rad/s)
+
+#==============================================================================
 # Signal frequencies (Hz)
 #==============================================================================
 GPS_L1 = 1575.42e6                              # GPS L1 frequency
