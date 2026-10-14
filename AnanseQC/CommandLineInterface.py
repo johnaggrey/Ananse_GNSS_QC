@@ -260,4 +260,13 @@ class C_QcCommand:
 # \Function: Main
 # \Brief: Module entry point used by the console script and python -m
 # \Params:
-#           None
+#           None
+# \Returns:
+#           None
+#==============================================================================
+def Main():
+    C_QcCommand().Main()
+
+
+if __name__ == '__main__':
+    Main()
