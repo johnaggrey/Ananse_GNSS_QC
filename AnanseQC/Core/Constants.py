@@ -66,13 +66,23 @@ PI = 3.14159265358979323846                     # Pi
 # Earth model and broadcast orbit
 # Frame: WGS84. a is metres. f is dimensionless.
 # GPS_GM and GPS_OMEGA_E are the IS-GPS-200 broadcast values.
-# QZSS uses these same two values.
-# GM is m^3/s^2. Earth rotation is rad/s.
+# QZSS uses the GPS GM and Earth rate.
+# Galileo GST is treated as GPST. NavIC time is treated as GPST.
+# BeiDou time is BDT. GPST = BDT + BDT_TO_GPST_SEC.
+# GM is m^3/s^2. Earth rotation is rad/s. The GEO angle is radians.
 #==============================================================================
 WGS84_A = 6378137.0                             # WGS84 semi-major axis (m)
 WGS84_F = 1.0 / 298.257223563                   # WGS84 flattening
 GPS_GM = 3.986005e14                            # GPS/QZSS broadcast GM (m^3/s^2)
 GPS_OMEGA_E = 7.2921151467e-5                   # GPS/QZSS Earth rotation (rad/s)
+GAL_GM = 3.986004418e14                         # Galileo broadcast GM (m^3/s^2)
+GAL_OMEGA_E = 7.2921151467e-5                   # Galileo Earth rotation (rad/s)
+BDS_GM = 3.986004418e14                         # BeiDou broadcast GM (m^3/s^2)
+BDS_OMEGA_E = 7.2921150e-5                      # BeiDou Earth rotation (rad/s)
+BDT_TO_GPST_SEC = 14.0                          # GPST minus BDT (s)
+BDS_GEO_ROT_RAD = 5.0 * PI / 180.0              # BeiDou GEO X-axis rotation
+NAVIC_GM = 3.986005e14                          # NavIC broadcast GM (m^3/s^2)
+NAVIC_OMEGA_E = 7.2921151467e-5                 # NavIC Earth rotation (rad/s)
 
 #==============================================================================
 # Signal frequencies (Hz)

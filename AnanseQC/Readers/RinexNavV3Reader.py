@@ -52,9 +52,8 @@ STATE_LINE_COUNT = 4
 # RINEX kilometres to stored metres.
 KM_TO_M = 1000.0
 
-# BDT week 0 begins at GPS week 1356. GPST = BDT + 14 seconds.
+# BDT week 0 begins at GPS week 1356. GPST = BDT + Constants.BDT_TO_GPST_SEC.
 BDT_GPS_WEEK_OFFSET = 1356
-BDT_TO_GPST_SEC = 14.0
 
 # RINEX 4 ephemeris subtypes that still use the RINEX 3 orbit lines.
 CLASSIC_EPH_MESSAGES = ('LNAV', 'INAV', 'FNAV', 'D1', 'D2', 'FDMA', 'SBAS')
@@ -508,10 +507,10 @@ class C_RinexNavReaderV3:
             return None, None
 
         if eSystem == eGnss.eBDS:
-            tocGpsts = tocCalendar + BDT_TO_GPST_SEC
+            tocGpsts = tocCalendar + Constants.BDT_TO_GPST_SEC
             toeGpsts = ((week + BDT_GPS_WEEK_OFFSET) * Constants.SECONDS_IN_WEEK
                         + toeSow
-                        + BDT_TO_GPST_SEC)
+                        + Constants.BDT_TO_GPST_SEC)
         else:
             tocGpsts = tocCalendar
             toeGpsts = week * Constants.SECONDS_IN_WEEK + toeSow
