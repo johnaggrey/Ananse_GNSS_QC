@@ -623,6 +623,69 @@ class C_QcPlots:
         return figure
 
     #==============================================================================
+    # \Function: PlotSnrElevation
+    # \Brief: Mean SNR in dB-Hz against 10-degree elevation bins
+    # \Note:
+    #   Empty bins are omitted. They are not drawn as 0 dB-Hz.
+    #   The point is placed at the centre of the bin.
+    # \Params:
+    #           elevationSnr    [in]    S_ElevationSnrResult
+    # \Returns:
+    #           matplotlib.figure.Figure
+    #==============================================================================
+    def PlotSnrElevation(self, elevationSnr):
+        import matplotlib.pyplot as plt
+
+        centres = []
+        means = []
+        for elevBin in elevationSnr.bins:
+            if elevBin.count <= 0:
+                continue
+            centreDeg = 0.5 * (elevBin.elev_min_deg + elevBin.elev_max_deg)
+            centres.append(centreDeg)
+            means.append(elevBin.mean_dbhz)
+        # END for-loop over elevation bins
+
+        figure, axes = plt.subplots(figsize=(8.0, 4.5))
+        axes.set_xlabel('Elevation (degrees)')
+        axes.set_ylabel('Mean SNR (dB-Hz)')
+        axes.set_title('SNR by elevation')
+        axes.set_xlim(0.0, 90.0)
+        axes.grid(True, linestyle=':', linewidth=0.6)
+        axes.axhline(
+            SNR_FAIR_THRESHOLD,
+            linestyle='--',
+            linewidth=1.0,
+            label='Fair, 25 dB-Hz',
+        )
+        axes.axhline(
+            SNR_GOOD_THRESHOLD,
+            linestyle='--',
+            linewidth=1.0,
+            label='Good, 35 dB-Hz',
+        )
+        if len(centres) == 0:
+            axes.text(
+                0.5,
+                0.5,
+                'No elevation SNR',
+                transform=axes.transAxes,
+                ha='center',
+                va='center',
+            )
+        else:
+            axes.plot(
+                centres,
+                means,
+                marker='o',
+                linestyle='-',
+                label='Mean SNR',
+            )
+        axes.legend(loc='best')
+        figure.tight_layout()
+        return figure
+
+    #==============================================================================
     # \Function: Show
     # \Brief: Displays one figure on screen and blocks until it is closed
     # \Params:

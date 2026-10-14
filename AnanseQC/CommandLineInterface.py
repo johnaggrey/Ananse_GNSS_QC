@@ -9,6 +9,7 @@ import sys
 from AnanseQC import __version__
 from AnanseQC.Core.Enums import eFileReadingStatus
 from AnanseQC.QualityCheck import AnalyseFile
+from AnanseQC.QualityChecks.ElevationSnr import C_ElevationSnr
 from AnanseQC.Readers.NavReader import C_RinexNavReader
 from AnanseQC.Reports.Plots import C_QcPlots
 from AnanseQC.Reports.QualityCheckReport import C_QcReport
@@ -46,7 +47,7 @@ class C_QcCommand:
     #           outputFormat    [in]    'text' or 'json'
     #           outputFile      [in]    Report path, or None to print the report
     #           bVerbose        [in]    True enables debug logging
-    #           navPath         [in]    Navigation file, or None to skip the sky plot
+    #           navPath         [in]    Navigation file, or None to skip sky and elevation SNR
     # \Returns:
     #           int             0 on success, 1 on error
     #==============================================================================
@@ -132,6 +133,10 @@ class C_QcCommand:
         multipathFigure = c_Plots.PlotMultipath(multipathSnr)
         snrFigure = c_Plots.PlotSnr(multipathSnr)
         skyFigure = self._SkyFigure(c_Plots, obsFile, keplerEph)
+        elevFigure = None
+        if skyFigure is not None:
+            elevResult = C_ElevationSnr().Analyse(obsFile, keplerEph)
+            elevFigure = c_Plots.PlotSnrElevation(elevResult)
         if outputFile is None:
             print("Showing plots. Close the figures to exit.")
             c_Plots.Show(satFigure)
@@ -157,6 +162,9 @@ class C_QcCommand:
             if skyFigure is not None:
                 skyPath = c_Plots.SaveBeside(skyFigure, outputFile, 'sky')
                 print(f"Plot written to: {skyPath}")
+            if elevFigure is not None:
+                elevPath = c_Plots.SaveBeside(elevFigure, outputFile, 'snr_elevation')
+                print(f"Plot written to: {elevPath}")
 
         return 0
 
@@ -165,7 +173,8 @@ class C_QcCommand:
     # \Brief: Builds the sky plot when a navigation file and receiver position exist
     # \Note:
     #   A missing navigation file leaves the other plots unchanged.
-    #   A receiver at the ECEF origin prints a message and skips the figure.
+    #   A receiver at the ECEF origin prints a message and skips the sky plot
+    #   and the elevation SNR plot, which share this check.
     # \Params:
     #           c_Plots         [in]    C_QcPlots
     #           obsFile         [in]    Parsed observation file
@@ -179,7 +188,7 @@ class C_QcCommand:
 
         receiver = obsFile.header.approx_position
         if receiver[0] == 0.0 and receiver[1] == 0.0 and receiver[2] == 0.0:
-            print("Approximate position is zero. Sky plot skipped.")
+            print("Approximate position is zero. Sky plot and elevation SNR plot skipped.")
             return None
 
         return c_Plots.PlotSky(obsFile, keplerEph)
@@ -224,7 +233,7 @@ class C_QcCommand:
         parser.add_argument(
             '--nav',
             default=None,
-            help='RINEX navigation file for the sky plot',
+            help='RINEX navigation file for the sky plot and elevation SNR plot',
         )
         parser.add_argument(
             '--verbose', '-v',
@@ -251,13 +260,4 @@ class C_QcCommand:
 # \Function: Main
 # \Brief: Module entry point used by the console script and python -m
 # \Params:
-#           None
-# \Returns:
-#           None
-#==============================================================================
-def Main():
-    C_QcCommand().Main()
-
-
-if __name__ == '__main__':
-    Main()
+#           None
