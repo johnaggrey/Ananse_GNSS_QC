@@ -9,6 +9,7 @@ import sys
 from AnanseQC import __version__
 from AnanseQC.Core.Enums import eFileReadingStatus
 from AnanseQC.QualityCheck import AnalyseFile
+from AnanseQC.Readers.NavReader import C_RinexNavReader
 from AnanseQC.Reports.Plots import C_QcPlots
 from AnanseQC.Reports.QualityCheckReport import C_QcReport
 
@@ -45,10 +46,11 @@ class C_QcCommand:
     #           outputFormat    [in]    'text' or 'json'
     #           outputFile      [in]    Report path, or None to print the report
     #           bVerbose        [in]    True enables debug logging
+    #           navPath         [in]    Navigation file, or None to skip the sky plot
     # \Returns:
     #           int             0 on success, 1 on error
     #==============================================================================
-    def Run(self, filePath, outputFormat='text', outputFile=None, bVerbose=False):
+    def Run(self, filePath, outputFormat='text', outputFile=None, bVerbose=False, navPath=None):
         self._SetupLogging(bVerbose)
 
         if os.path.exists(filePath) == False:
@@ -61,6 +63,18 @@ class C_QcCommand:
         if eStatus != eFileReadingStatus.eSuccess:
             print(f"Error: Failed to read file (status: {eStatus.name})", file=sys.stderr)
             return 1
+
+        keplerEph = None
+        if navPath is not None:
+            print(f"Reading navigation file: {navPath}")
+            navFile, navStatus = C_RinexNavReader().Read(navPath)
+            if navStatus != eFileReadingStatus.eSuccess:
+                print(
+                    f"Error: Failed to read navigation file (status: {navStatus.name})",
+                    file=sys.stderr,
+                )
+                return 1
+            keplerEph = navFile.kepler_eph
 
         nEpoch = results['availability'].total_epochs
         print(f"  RINEX version {obsFile.header.version}, "
@@ -117,6 +131,7 @@ class C_QcCommand:
         slipFigure = c_Plots.PlotSlips(obsFile, slips)
         multipathFigure = c_Plots.PlotMultipath(multipathSnr)
         snrFigure = c_Plots.PlotSnr(multipathSnr)
+        skyFigure = self._SkyFigure(c_Plots, obsFile, keplerEph)
         if outputFile is None:
             print("Showing plots. Close the figures to exit.")
             c_Plots.Show(satFigure)
@@ -139,8 +154,35 @@ class C_QcCommand:
             print(f"Plot written to: {multipathPath}")
             snrPath = c_Plots.SaveBeside(snrFigure, outputFile, 'snr')
             print(f"Plot written to: {snrPath}")
+            if skyFigure is not None:
+                skyPath = c_Plots.SaveBeside(skyFigure, outputFile, 'sky')
+                print(f"Plot written to: {skyPath}")
 
         return 0
+
+    #==============================================================================
+    # \Function: _SkyFigure
+    # \Brief: Builds the sky plot when a navigation file and receiver position exist
+    # \Note:
+    #   A missing navigation file leaves the other plots unchanged.
+    #   A receiver at the ECEF origin prints a message and skips the figure.
+    # \Params:
+    #           c_Plots         [in]    C_QcPlots
+    #           obsFile         [in]    Parsed observation file
+    #           keplerEph       [in]    Kepler records, or None when --nav was omitted
+    # \Returns:
+    #           matplotlib figure or None
+    #==============================================================================
+    def _SkyFigure(self, c_Plots, obsFile, keplerEph):
+        if keplerEph is None:
+            return None
+
+        receiver = obsFile.header.approx_position
+        if receiver[0] == 0.0 and receiver[1] == 0.0 and receiver[2] == 0.0:
+            print("Approximate position is zero. Sky plot skipped.")
+            return None
+
+        return c_Plots.PlotSky(obsFile, keplerEph)
 
     #==============================================================================
     # \Function: Main
@@ -159,6 +201,7 @@ class C_QcCommand:
                 '  ananse-qc station.24o\n'
                 '  ananse-qc data.rnx --format json --output report.json\n'
                 '  ananse-qc data.obs --verbose\n'
+                '  ananse-qc station.24o --nav station.nav\n'
             ),
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
@@ -179,6 +222,11 @@ class C_QcCommand:
             help='Output file path (default: print to stdout)',
         )
         parser.add_argument(
+            '--nav',
+            default=None,
+            help='RINEX navigation file for the sky plot',
+        )
+        parser.add_argument(
             '--verbose', '-v',
             action='store_true',
             help='Enable verbose/debug output',
@@ -195,6 +243,7 @@ class C_QcCommand:
             outputFormat=args.format,
             outputFile=args.output,
             bVerbose=args.verbose,
+            navPath=args.nav,
         )
         sys.exit(exitCode)
 

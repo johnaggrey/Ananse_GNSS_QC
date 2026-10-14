@@ -4,6 +4,8 @@
 # Figures use the QC results already computed by the engines.
 # Time axes are hours from the first epoch, in GPST.
 # Satellite count is dimensionless.
+# The sky plot uses azimuth clockwise from north and elevation from the
+# horizon, both in degrees. Its radius is 90 degrees minus elevation.
 
 import math
 import os
@@ -528,6 +530,97 @@ class C_QcPlots:
         if nObs <= 0:
             return None
         return weightedSum / float(nObs)
+
+    #==============================================================================
+    # \Function: PlotSky
+    # \Brief: Plots satellite azimuth and elevation on a polar sky plot
+    # \Note:
+    #   North is at the top. Azimuth increases clockwise. Radius is
+    #   90 degrees minus elevation, so zenith is the centre.
+    #   One marker is drawn for each tracked epoch that has a position.
+    #   Satellites without a position are omitted.
+    #   Angles are degrees. The receiver position is ECEF metres.
+    # \Params:
+    #           obsFile         [in]    Parsed RINEX observation file
+    #           keplerEph       [in]    List of S_KeplerEph
+    # \Returns:
+    #           matplotlib.figure.Figure
+    #==============================================================================
+    def PlotSky(self, obsFile, keplerEph):
+        import matplotlib.pyplot as plt
+
+        from AnanseQC.Navigation.SatGeometry import C_SatGeometry
+
+        figure, axes = plt.subplots(
+            figsize=(6.5, 6.5),
+            subplot_kw={'projection': 'polar'},
+        )
+        axes.set_theta_zero_location('N')
+        axes.set_theta_direction(-1)
+        axes.set_ylim(0.0, 90.0)
+        axes.set_yticks([0.0, 30.0, 60.0, 90.0])
+        axes.set_yticklabels(['90°', '60°', '30°', '0°'])
+        axes.set_title('Sky plot')
+
+        receiver = obsFile.header.approx_position
+        if receiver[0] == 0.0 and receiver[1] == 0.0 and receiver[2] == 0.0:
+            axes.text(
+                0.5,
+                0.5,
+                'No approximate position',
+                transform=axes.transAxes,
+                ha='center',
+                va='center',
+            )
+            figure.tight_layout()
+            return figure
+
+        c_Geom = C_SatGeometry()
+        bySystem = {}
+        for epoch in obsFile.epochs:
+            if epoch.epoch_flag > 1:
+                continue
+            for sat in epoch.satellites:
+                angles = c_Geom.AzEl(
+                    keplerEph,
+                    sat.system,
+                    sat.prn,
+                    epoch.abs_gps_time,
+                    receiver,
+                )
+                if angles is None:
+                    continue
+                azimuthDeg = angles[0]
+                elevationDeg = angles[1]
+                theta = math.radians(azimuthDeg)
+                radius = 90.0 - elevationDeg
+                if sat.system not in bySystem:
+                    bySystem[sat.system] = ([], [])
+                bySystem[sat.system][0].append(theta)
+                bySystem[sat.system][1].append(radius)
+            # END for-loop over satellites
+        # END for-loop over epochs
+
+        if len(bySystem) == 0:
+            axes.text(
+                0.5,
+                0.5,
+                'No sky positions',
+                transform=axes.transAxes,
+                ha='center',
+                va='center',
+            )
+        else:
+            systems = sorted(bySystem.keys(), key=lambda eSystem: eSystem.value)
+            for eSystem in systems:
+                thetas, radii = bySystem[eSystem]
+                sysChar = SYSTEM_TO_CHAR.get(eSystem, '?')
+                label = f"{eSystem.name} ({sysChar})"
+                axes.scatter(thetas, radii, s=18, label=label)
+            # END for-loop over constellations
+            axes.legend(loc='upper left', bbox_to_anchor=(1.02, 1.0))
+        figure.tight_layout()
+        return figure
 
     #==============================================================================
     # \Function: Show
