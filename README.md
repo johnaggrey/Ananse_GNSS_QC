@@ -2,7 +2,7 @@
 
 **A comprehensive quality control tool for GNSS RINEX observation files.**
 
-Ananse GNSS QC reads RINEX observation files (versions 2.x, 3.x, and 4.x) and performs a suite of quality control analyses to assess data readiness for GNSS processing. It produces detailed text and JSON reports suitable for both human inspection and programmatic consumption (e.g., via a web application).
+Ananse GNSS QC reads RINEX observation files (versions 2.x, 3.x, and 4.x) and performs a suite of quality control analyses to assess data readiness for GNSS processing. It produces detailed text and JSON reports suitable for both human inspection and programmatic consumption (e.g., via a web application). An optional RINEX navigation file supplies broadcast positions for a sky plot and elevation-binned SNR.
 
 ---
 
@@ -16,8 +16,9 @@ Ananse GNSS QC reads RINEX observation files (versions 2.x, 3.x, and 4.x) and pe
 - **Cycle Slip Detection** — Time-Differenced Carrier Phase (TDCP) and Melbourne-Wübbena (MW) dual-frequency methods
 - **Multipath Estimation** — MP1/MP2 linear combinations (geometry-free, ionosphere-free) with per-satellite RMS
 - **SNR Quality Metrics** — per-satellite, per-observable signal strength statistics with good/fair/poor classification
+- **Navigation Files** — RINEX 2 and RINEX 3/4 broadcast ephemerides. GPS, Galileo, BeiDou, QZSS, and NavIC positions are computed. GLONASS and SBAS records are stored and are not used for positions
 - **Dual Output Formats** — human-readable text reports and machine-readable JSON for web APIs
-- **QC Plots** — seven matplotlib figures, shown on screen or saved as PNG files beside the report
+- **QC Plots** — seven matplotlib figures from the observation file, plus a sky plot and an elevation-binned SNR plot when `--nav` is given
 
 ---
 
@@ -49,6 +50,9 @@ ananse-qc data.obs --verbose
 # Text report plus seven PNG figures beside the report file
 ananse-qc station.24o --output report.txt
 
+# The seven QC figures, plus a sky plot and elevation-binned SNR
+ananse-qc station.24o --nav station.nav --output report.txt
+
 # Or run as a Python module
 python -m AnanseQC station.24o
 ```
@@ -71,7 +75,7 @@ print(report["schema_version"])
 print(report["availability"]["duration_seconds"])
 ```
 
-`RunQualityCheck` returns the report only. It does not open or save figures. A web application should keep using that call.
+`RunQualityCheck` returns the report only. It does not open or save figures, and it does not read a navigation file. A web application should keep using that call. The sky plot and the elevation SNR plot are command-line figures.
 
 ### Plots
 
@@ -86,10 +90,30 @@ The command-line tool draws seven figures from the same QC results as the report
 | `report_slips.png` | Cycle slips versus time (TDCP and Melbourne-Wübbena) |
 | `report_multipath.png` | MP1 and MP2 RMS, in metres |
 | `report_snr.png` | Mean SNR per satellite, in dB-Hz, with lines at 25 and 35 |
+| `report_sky.png` | Polar sky plot. Written only with `--nav` |
+| `report_snr_elevation.png` | Mean SNR in 10-degree elevation bins, in dB-Hz. Written only with `--nav` |
 
-Without `--output`, the text report is printed and the figures open on screen. Close the figures to exit. With `--output`, the report is written to that path and each figure is saved beside it. The PNG name is the report file name without its extension, plus the plot name. `ananse-qc station.24o --output report.json` writes `report.json` and the same seven PNG files, including `report_snr.png`.
+Without `--output`, the text report is printed and the figures open on screen. Close the figures to exit. With `--output`, the report is written to that path and each figure is saved beside it. The PNG name is the report file name without its extension, plus the plot name. `ananse-qc station.24o --output report.json` writes `report.json` and the seven observation PNG files, including `report_snr.png`. Adding `--nav station.nav` also writes `report_sky.png` and `report_snr_elevation.png`.
 
-A sky plot needs satellite azimuth and elevation from a navigation file. This tool reads observation files only, so sky plots and elevation-dependent SNR wait on navigation-file reading.
+### Navigation file
+
+`--nav` reads a RINEX 2 navigation file (GPS `N`, GLONASS `G`, or GEO/SBAS `H`) or a RINEX 3/4 mixed navigation file (type `N`). RINEX 4 `> EPH` records use the RINEX 3 layout. Other RINEX 4 blocks are skipped. The observation QC report is unchanged when `--nav` is omitted. If `--nav` is set and the navigation file cannot be read, the run stops before the report and the plots.
+
+Broadcast positions are ECEF metres. The receiver is the observation-header approximate position, also ECEF metres on WGS84. Antenna height is not applied. Azimuth is degrees clockwise from north, in the range 0 to 360. Elevation is degrees from the horizon, positive upward. One light-time iteration is applied. On the sky plot, north is at the top, azimuth increases clockwise, and the radius is 90 degrees minus elevation, so zenith is at the centre.
+
+Times stored on each ephemeris are absolute GPST seconds.
+
+| System | Broadcast time | Position |
+|--------|----------------|----------|
+| GPS, QZSS, NavIC | GPST | Kepler orbit, ECEF metres |
+| Galileo | GST, treated as GPST | Kepler orbit, ECEF metres |
+| BeiDou | BDT. GPST = BDT + 14 s | Kepler orbit, ECEF metres. GEO PRNs 1–5 and 59–63 include the 5 degree ICD rotation |
+| GLONASS | The file epoch is UTC. The stored epoch is that calendar time read as GPST, plus the header leap seconds | State record stored in metres, m/s, and m/s². The frame is PZ-90. No position is computed |
+| SBAS | GPST | State record stored in metres, m/s, and m/s². No position is computed |
+
+A Kepler satellite is plotted only when its health is 0 and the epoch is within 4 hours of the time of ephemeris (14400 s). GLONASS and SBAS records are read and are not drawn.
+
+The elevation SNR figure places each `S*` observation into a 10-degree bin from 0 to 90 degrees. Each sample has weight 1, and the bin value is the count-weighted mean in dB-Hz. Empty bins stay empty. The same 25 and 35 dB-Hz lines are drawn. Both navigation figures are skipped when the approximate position is the ECEF origin `(0, 0, 0)`. The tool then prints `Approximate position is zero. Sky plot and elevation SNR plot skipped.`
 
 ---
 
@@ -104,17 +128,26 @@ AnanseQC/
 │
 ├── Readers/                   # RINEX file parsing
 │   ├── ObsTypes.py            # S_RinexObsFile, S_EpochRecord, S_SatObs
+│   ├── NavTypes.py            # S_KeplerEph, S_StateEph, S_RinexNavFile
 │   ├── RinexDetector.py       # C_RinexVersionDetector
 │   ├── RinexV2Reader.py       # C_RinexObsReaderV2
 │   ├── RinexV3Reader.py       # C_RinexObsReaderV3 (also reads 4.x)
-│   └── Reader.py              # C_RinexObsReader
+│   ├── RinexNavV2Reader.py    # C_RinexNavReaderV2
+│   ├── RinexNavV3Reader.py    # C_RinexNavReaderV3 (also reads 4.x)
+│   ├── Reader.py              # C_RinexObsReader
+│   └── NavReader.py           # C_RinexNavReader
+│
+├── Navigation/                # Broadcast orbits and topocentric geometry
+│   ├── BroadcastOrbit.py      # C_BroadcastOrbit (ECEF metres, GPST)
+│   └── SatGeometry.py         # C_SatGeometry (azimuth and elevation, degrees)
 │
 ├── QualityChecks/             # QC analysis engines
 │   ├── Availability.py        # C_ObsAvailability
 │   ├── MissingObservables.py  # C_MissingObservables
 │   ├── EpochSampling.py       # C_EpochSampling
 │   ├── CycleSlips.py          # C_CycleSlipDetector (TDCP + Melbourne-Wübbena)
-│   └── MultipathSnr.py        # C_MultipathSnr
+│   ├── MultipathSnr.py        # C_MultipathSnr
+│   └── ElevationSnr.py        # C_ElevationSnr (dB-Hz in 10-degree bins)
 │
 ├── Reports/                   # Report generation
 │   ├── QualityCheckReport.py  # C_QcReport (text and JSON)
@@ -138,7 +171,15 @@ Tests/
 ├── Test_MissingPlot.py
 ├── Test_SlipPlot.py
 ├── Test_MultipathPlot.py
-└── Test_SnrPlot.py
+├── Test_SnrPlot.py
+├── Test_NavDetector.py
+├── Test_NavV3Reader.py
+├── Test_NavV2Reader.py
+├── Test_BroadcastOrbitGps.py
+├── Test_BroadcastOrbitOther.py
+├── Test_SatGeometry.py
+├── Test_SkyPlot.py
+└── Test_ElevationSnr.py
 ```
 
 ---
@@ -175,6 +216,8 @@ Classifies signal strength observations into three tiers:
 - **Fair**: 25–35 dBHz
 - **Poor**: < 25 dBHz
 
+When `--nav` is supplied, mean SNR is also accumulated in 10-degree elevation bins. See Navigation file above.
+
 ---
 
 ## Supported RINEX Versions
@@ -201,8 +244,8 @@ pytest Tests/ -v
 
 ## Roadmap
 
-- [ ] Navigation file reading (needed for sky plots and elevation-dependent SNR)
-- [ ] Elevation-dependent multipath and SNR analysis
+- [x] Navigation file reading (RINEX 2 and 3/4), sky plot, and elevation-binned SNR
+- [ ] Elevation-dependent multipath
 - [ ] Ionospheric delay estimation (geometry-free combination)
 - [ ] RINEX file repair/cleaning suggestions
 - [ ] HTML report generation with charts
